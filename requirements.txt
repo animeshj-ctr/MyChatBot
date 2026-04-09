@@ -1,0 +1,11 @@
+notebook
+jupyter
+openai
+dotenv
+requests
+fastapi
+sqlalchemy
+uvicorn
+pydantic
+psycopg2-binary
+pylint
