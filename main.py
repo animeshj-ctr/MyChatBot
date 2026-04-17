@@ -103,6 +103,24 @@ def find_user_from_text(text: str, db: Session):
 
     return None, None
 
+def query_mcp_server(tool_name: str, parameters: Dict[str, Any]) -> str:
+    """
+    Sends a tool invocation request to the MCP server.
+    Assumes MCP server endpoint is set in env var MCP_SERVER_URL.
+    """
+    mcp_url = os.getenv("MCP_SERVER_URL", "http://localhost:3000/mcp")  # Default to local MCP server
+    payload = {
+        "tool": tool_name,
+        "parameters": parameters
+    }
+    try:
+        response = requests.post(mcp_url, json=payload, timeout=10)
+        response.raise_for_status()
+        result = response.json()
+        return result.get("result", "MCP server error: No result")
+    except requests.RequestException as e:
+        return f"MCP server error: {str(e)}"
+    
 def answer_business_query(text: str, db: Session) -> str | None:
     """
     Try to answer using the Expenses/Users DB.
@@ -322,21 +340,33 @@ def get_response_from_llm(history: List[Dict[str, str]], user_msg: str) -> str:
     """
     Swap this with real LLM call when ready.
     """
-    if USE_ECHO:
-        if "hello" in user_msg.lower():
-            return "Hi! I'm your FastAPI chatbot. How can I help you today?"
-        return f"You said: {user_msg}"
+    # if USE_ECHO:
+    #     if "hello" in user_msg.lower():
+    #         return "Hi! I'm your FastAPI chatbot. How can I help you today?"
+    #     return f"You said: {user_msg}"
 
-    # --- Example (pseudo) OpenAI/Azure integration ---
-    # from openai import OpenAI
-    # client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    # messages = [{"role": "system", "content": "You are a helpful assistant."}]
-    # for t in history:
-    #     messages.append({"role": "user", "content": t["user"]})
-    #     messages.append({"role": "assistant", "content": t["bot"]})
-    # messages.append({"role": "user", "content": user_msg})
-    # resp = client.chat.completions.create(model="gpt-4o-mini", messages=messages, temperature=0.4)
-    # return resp.choices[0].message.content
+    from openai import OpenAI
+    HF_SECRET_KEY= os.getenv("HUGGINGFACEHUB_API_TOKEN")
+
+
+    client = OpenAI(
+        base_url="https://router.huggingface.co/v1",
+        api_key=HF_SECRET_KEY,
+    )
+
+    messages = [{"role": "system", "content": "You are a helpful assistant."}]
+    for t in history:
+        messages.append({"role": "user", "content": t["user"]})
+        messages.append({"role": "assistant", "content": t["bot"]})
+    messages.append({"role": "user", "content": user_msg})
+
+    try:
+        resp = client.chat.completions.create(model="MiniMaxAI/MiniMax-M2.7:novita", messages=messages, temperature=0.4)
+        return resp.choices[0].message.content
+
+    except Exception as e:
+        print("Retrying...", e)
+        time.sleep(2)
 
     return "LLM not configured. Set USE_ECHO=true or add an API key."
 
@@ -344,6 +374,7 @@ def get_response_from_llm(history: List[Dict[str, str]], user_msg: str) -> str:
 def chat(payload: ChatMessage, db: Session = Depends(get_db)):
     session_id = (payload.session_id or "default").strip()
     user_msg = (payload.message or "").strip()
+    print(f"{user_msg} (session: {session_id})")
     if not user_msg:
         return {"bot": "Please say something.", "session_id": session_id}
 
