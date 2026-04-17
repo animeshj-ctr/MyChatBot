@@ -7,21 +7,51 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="container">
-    <h2>🤖 FastAPI Chatbot</h2>
-
-    <div id="mode">
+  <aside id="sidebar" class="collapsed">
+    <button id="toggle-nav" aria-label="Toggle navigation">☰</button>
+    <div class="nav-content">
+      <h3>Connection</h3>
       <label><input type="radio" name="mode" value="rest" checked /> REST</label>
       <label><input type="radio" name="mode" value="ws" /> WebSocket</label>
+
+      <div class="file-tools">
+        <h4>Upload Context</h4>
+        <label class="file-btn">
+          PDF
+          <input type="file" accept=".pdf" />
+        </label>
+        <label class="file-btn">
+          Image
+          <input type="file" accept="image/*" />
+        </label>
+        <label class="file-btn">
+          Excel
+          <input type="file" accept=".xls,.xlsx" />
+        </label>
+      </div>
     </div>
+  </aside>
 
-    <div id="chat-window"></div>
+  <main>
+    <header>
+      <div>
+        <h1>FastAPI Chatbot</h1>
+        <p>Chat with the bot using REST or WebSocket.</p>
+      </div>
+    </header>
 
-    <form id="chat-form">
-      <input id="msg" type="text" placeholder="Type your message..." autocomplete="off" />
-      <button type="submit">Send</button>
-    </form>
-  </div>
+    <section id="input-panel">
+      <form id="chat-form">
+        <input id="msg" type="text" placeholder="Type your message..." autocomplete="off" />
+        <button type="submit">Send</button>
+      </form>
+      <div class="tool-hint">
+        Attach PDF, image, or Excel files for context.
+      </div>
+    </section>
+
+    <section id="chat-window"></section>
+  </main>
 
   <script>
     const chatWindow = document.getElementById('chat-window');
@@ -104,6 +134,13 @@
         ws.send(JSON.stringify({ message: text }));
       }
     });
+
+    const sidebar = document.getElementById('sidebar');
+    const toggleNav = document.getElementById('toggle-nav');
+    toggleNav.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+    });
+
   </script>
 </body>
 </html>
