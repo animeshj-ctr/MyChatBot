@@ -7,60 +7,82 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <aside id="sidebar" class="collapsed">
-    <button id="toggle-nav" aria-label="Toggle navigation">☰</button>
-    <div class="nav-content">
-      <h3>Connection</h3>
-      <label><input type="radio" name="mode" value="rest" checked /> REST</label>
-      <label><input type="radio" name="mode" value="ws" /> WebSocket</label>
-
-      <div class="file-tools">
-        <h4>Upload Context</h4>
-        <label class="file-btn">
-          PDF
-          <input type="file" accept=".pdf" />
-        </label>
-        <label class="file-btn">
-          Image
-          <input type="file" accept="image/*" />
-        </label>
-        <label class="file-btn">
-          Excel
-          <input type="file" accept=".xls,.xlsx" />
-        </label>
+  <div id="login" style="display: block;">
+    <form id="login-form">
+      <input id="username" type="text" placeholder="Username" required />
+      <input id="password" type="password" placeholder="Password" required />
+      <button type="submit">Login</button>
+    </form>
+  </div>
+  <div id="chat" style="display: none;">
+    <aside id="sidebar" class="collapsed">
+      <button id="toggle-nav" aria-label="Toggle navigation">☰</button>
+      <div class="nav-content">
+        <div class="user-info">
+          <h4 id="user-name">User</h4>
+          <button id="logout-btn">Logout</button>
+        </div>
+        <h3>Connection</h3>
+        <label><input type="radio" name="mode" value="rest" checked /> REST</label>
+        <label><input type="radio" name="mode" value="ws" /> WebSocket</label>
+        <div class="file-tools">
+          <h4>Upload Context</h4>
+          <label class="file-btn">
+            PDF<input type="file" accept=".pdf" />
+          </label>
+          <label class="file-btn">
+            Image<input type="file" accept="image/*" />
+          </label>
+          <label class="file-btn">
+            Excel<input type="file" accept=".xls,.xlsx" />
+          </label>
+        </div>
       </div>
-    </div>
-  </aside>
+    </aside>
 
-  <main>
-    <header>
-      <div>
-        <h1>FastAPI Chatbot</h1>
-        <p>Chat with the bot using REST or WebSocket.</p>
-      </div>
-    </header>
+    <main>
+      <header>
+        <div>
+          <h1>FastAPI Chatbot</h1>
+          <p>Chat with the bot using REST or WebSocket.</p>
+        </div>
+      </header>
 
-    <section id="input-panel">
-      <form id="chat-form">
-        <input id="msg" type="text" placeholder="Type your message..." autocomplete="off" />
-        <button type="submit">Send</button>
-      </form>
-      <div class="tool-hint">
-        Attach PDF, image, or Excel files for context.
-      </div>
-    </section>
+      <section id="input-panel">
+        <form id="chat-form">
+          <input id="msg" type="text" placeholder="Type your message..." autocomplete="off" />
+          <button type="submit">Send</button>
+        </form>
+        <div class="tool-hint">
+          Attach PDF, image, or Excel files for context.
+        </div>
+      </section>
 
-    <section id="chat-window"></section>
-  </main>
+      <section id="chat-window"></section>
+    </main>
+  </div>
 
   <script>
+    const loginForm = document.getElementById('login-form');
+    const loginDiv = document.getElementById('login');
+    const chatDiv = document.getElementById('chat');
     const chatWindow = document.getElementById('chat-window');
     const form = document.getElementById('chat-form');
     const msgInput = document.getElementById('msg');
     const modeRadios = document.querySelectorAll('input[name="mode"]');
+    const sidebar = document.getElementById('sidebar');
+    const toggleNav = document.getElementById('toggle-nav');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userNameEl = document.getElementById('user-name');
 
+    let token = null;
+    let currentUser = null;
     let sessionId = crypto.randomUUID();
     let ws = null;
+
+    toggleNav.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+    });
 
     function appendBubble(text, who = 'user') {
       const div = document.createElement('div');
@@ -97,7 +119,7 @@
 
     function ensureWS() {
       if (ws && ws.readyState === WebSocket.OPEN) return;
-      ws = new WebSocket(`ws://${location.host}/ws`);
+      ws = new WebSocket(`ws://${location.host}/ws?token=${token}`);
       ws.onmessage = (ev) => {
         const data = JSON.parse(ev.data);
         if (data.bot_partial) {
@@ -112,6 +134,45 @@
       };
     }
 
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const res = await fetch('/token', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({username, password})
+      });
+      if (res.ok) {
+        const data = await res.json();
+        token = data.access_token;
+        currentUser = username;
+        userNameEl.textContent = username;
+        loginDiv.style.display = 'none';
+        chatDiv.style.display = 'flex';
+      } else {
+        alert('Login failed');
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      if (token) {
+        await fetch('/logout', {
+          method: 'POST',
+          headers: {'Authorization': `Bearer ${token}`}
+        });
+      }
+      token = null;
+      currentUser = null;
+      chatDiv.style.display = 'none';
+      loginDiv.style.display = 'block';
+      chatWindow.innerHTML = '';
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = msgInput.value.trim();
@@ -120,27 +181,21 @@
       msgInput.value = '';
 
       if (currentMode() === 'rest') {
-        // REST call:
         const res = await fetch('/chat', {
           method: 'POST',
-          headers: {'Content-Type':'application/json'},
+          headers: {
+            'Content-Type':'application/json',
+            'Authorization': `Bearer ${token}`
+          },
           body: JSON.stringify({ session_id: sessionId, message: text })
         });
         const data = await res.json();
         appendBubble(data.bot, 'bot');
       } else {
-        // WebSocket streaming:
         ensureWS();
         ws.send(JSON.stringify({ message: text }));
       }
     });
-
-    const sidebar = document.getElementById('sidebar');
-    const toggleNav = document.getElementById('toggle-nav');
-    toggleNav.addEventListener('click', () => {
-      sidebar.classList.toggle('collapsed');
-    });
-
   </script>
 </body>
 </html>

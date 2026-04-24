@@ -56,10 +56,37 @@ aside.collapsed {
   flex-direction: column;
   gap: 18px;
 }
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+#user-name {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text);
+  font-weight: 600;
+}
+#logout-btn {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 4px 0;
+  text-decoration: underline;
+}
+#logout-btn:hover {
+  color: #1d4ed8;
+}
 aside.collapsed .nav-content h3,
 aside.collapsed .nav-content h4,
 aside.collapsed .nav-content label,
-aside.collapsed .tool-hint {
+aside.collapsed .tool-hint,
+aside.collapsed .user-info {
   display: none;
 }
 aside.collapsed .file-btn {
@@ -195,6 +222,41 @@ button[type="submit"]:hover {
 .bubble.bot.partial {
   border-style: dashed;
   border-color: #fbbf24;
+}
+#login {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  padding: 40px;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+#login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+#login-form input {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+}
+#login-form button {
+  padding: 12px;
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+#chat {
+  display: flex;
+  width: 100%;
 }
 @media (max-width: 900px) {
   body {
