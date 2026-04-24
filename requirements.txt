@@ -147,3 +147,7 @@ widgetsnbextension==4.0.15
 zipp==3.23.1
 zope.event==6.1
 zope.interface==8.3
+python-jose[cryptography]
+passlib[bcrypt]
+argon2-cffi
+python-multipart

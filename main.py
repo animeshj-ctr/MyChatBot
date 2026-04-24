@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, date
 from typing import List, Dict, Any, Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.encoders import jsonable_encoder
@@ -17,6 +17,11 @@ from models.models import Base, User, Expense  # your SQLAlchemy models
 
 import re
 from calendar import monthrange
+from controller.auth import (
+    Token, authenticate_user, create_access_token, get_current_user,
+    ACCESS_TOKEN_EXPIRE_MINUTES, fake_users_db
+)
+from fastapi.security import OAuth2PasswordRequestForm
 
 load_dotenv('config/dev/.env')
 
@@ -37,6 +42,26 @@ def get_db():
         yield db
     finally:
         db.close()
+
+@app.post("/logout")
+def logout(current_user: UserInDB = Depends(get_current_user)):
+    # Invalidate token if needed (for JWT, client-side is sufficient)
+    return {"message": "Logged out successfully"}
+
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 def parse_period(text: str):
     """
@@ -336,15 +361,14 @@ class ChatMessage(BaseModel):
     session_id: Optional[str] = "default"
     message: str
 
-def get_response_from_llm(history: List[Dict[str, str]], user_msg: str) -> str:
+def get_response_from_llm(history: List[Dict[str, str]], user_msg: str, username: str) -> str:
     """
     Swap this with real LLM call when ready.
     """
-    # if USE_ECHO:
-    #     if "hello" in user_msg.lower():
-    #         return "Hi! I'm your FastAPI chatbot. How can I help you today?"
-    #     return f"You said: {user_msg}"
-
+    # Check if this is the first message (empty history) and greet
+    if not history:
+        return f"Hello {username}, how can I help you today?"
+    
     from openai import OpenAI
     HF_SECRET_KEY= os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
@@ -371,10 +395,10 @@ def get_response_from_llm(history: List[Dict[str, str]], user_msg: str) -> str:
     return "LLM not configured. Set USE_ECHO=true or add an API key."
 
 @app.post("/chat")
-def chat(payload: ChatMessage, db: Session = Depends(get_db)):
+def chat(payload: ChatMessage, db: Session = Depends(get_db), current_user: UserInDB = Depends(get_current_user)):
     session_id = (payload.session_id or "default").strip()
     user_msg = (payload.message or "").strip()
-    print(f"{user_msg} (session: {session_id})")
+    print(f"{user_msg} (session: {session_id}, user: {current_user.username})")
     if not user_msg:
         return {"bot": "Please say something.", "session_id": session_id}
 
@@ -385,13 +409,13 @@ def chat(payload: ChatMessage, db: Session = Depends(get_db)):
 
     # 2) Otherwise, fallback to LLM/echo
     history = CHAT_HISTORY.setdefault(session_id, [])
-    bot_reply = get_response_from_llm(history, user_msg)
+    bot_reply = get_response_from_llm(history, user_msg, current_user.username)
     history.append({"user": user_msg, "bot": bot_reply})
     CHAT_HISTORY[session_id] = history[-20:]
     return {"bot": bot_reply, "session_id": session_id}
 
 @app.websocket("/ws")
-async def websocket_endpoint(ws: WebSocket):
+async def websocket_endpoint(ws: WebSocket, current_user: UserInDB = Depends(get_current_user)):
     await ws.accept()
     session_id = "default"
     CHAT_HISTORY.setdefault(session_id, [])
@@ -405,7 +429,7 @@ async def websocket_endpoint(ws: WebSocket):
                 continue
 
             history = CHAT_HISTORY[session_id]
-            full = get_response_from_llm(history, user_msg)
+            full = get_response_from_llm(history, user_msg, current_user.username)
 
             # Simulated streaming by words (real LLMs stream tokens)
             partial = ""
