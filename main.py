@@ -19,7 +19,7 @@ import re
 from calendar import monthrange
 from controller.auth import (
     Token, authenticate_user, create_access_token, get_current_user,
-    ACCESS_TOKEN_EXPIRE_MINUTES, fake_users_db, UserInDB
+    ACCESS_TOKEN_EXPIRE_MINUTES, UserInDB
 )
 from fastapi.security import OAuth2PasswordRequestForm
 from controller.rag_service import get_rag_service, initialize_rag
@@ -60,8 +60,12 @@ def logout(current_user: UserInDB = Depends(get_current_user)):
     return {"message": "Logged out successfully"}
 
 @app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    print('*' * 50)
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -23,3 +23,10 @@ class Expense(Base):
     credit_or_debit = Column(ENUM('credit', 'debit', name='credit_debit', create_type=False), nullable=False)
     expense_date = Column(Date, nullable=False)
     description = Column(String(255), nullable=False)
+
+class UserAuth(Base):
+    __tablename__ = "user_auth"
+    authid = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    userid = Column(Integer, ForeignKey("users.userid"), nullable=False, unique=True, index=True)
+    username = Column(String(50), nullable=False, unique=True, index=True)
+    hashed_password = Column(String(255), nullable=False)   
