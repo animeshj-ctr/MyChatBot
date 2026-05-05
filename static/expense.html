@@ -5,6 +5,8 @@
   <title>Add Expense - FastAPI Chatbot</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="/static/style.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"
+  integrity="sha384-..." crossorigin="anonymous">
 </head>
 <body>
   <div id="login" style="display: block;">
@@ -38,55 +40,69 @@
         </div>
       </header>
 
-      <section id="expense-panel">
-        <form id="expense-form">
-          <div class="form-group">
-            <label for="expense-userid">User ID *</label>
-            <input id="expense-userid" type="number" min="1" placeholder="Enter User ID" required />
-          </div>
+      <section id="expense-panel" class="container py-4">
+  <div class="card shadow-sm border-0">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 class="h4 mb-1">Add Expense</h2>
+          <p class="text-muted mb-0">Record a new expense transaction</p>
+        </div>
+      </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label for="expense-amount">Amount (₹) *</label>
-              <input id="expense-amount" type="number" step="0.01" min="0" placeholder="0.00" required />
-            </div>
-            <div class="form-group">
-              <label for="expense-date">Date *</label>
-              <input id="expense-date" type="date" required />
-            </div>
-          </div>
+      <form id="expense-form" class="row g-3">
+        <div class="col-12 col-md-4">
+          <label for="expense-userid" class="form-label">User ID *</label>
+          <input id="expense-userid" type="number" min="1"
+            class="form-control form-control-lg" placeholder="Enter User ID" required />
+        </div>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label for="expense-mode">Payment Mode *</label>
-              <input id="expense-mode" type="text" placeholder="e.g., Cash, Card, Cheque" required />
-            </div>
-            <div class="form-group">
-              <label>Transaction Type *</label>
-              <div class="radio-group">
-                <label class="radio-label">
-                  <input type="radio" name="expense-type" value="debit" checked /> Debit (Expense)
-                </label>
-                <label class="radio-label">
-                  <input type="radio" name="expense-type" value="credit" /> Credit (Income)
-                </label>
-              </div>
-            </div>
-          </div>
+        <div class="col-12 col-md-4">
+          <label for="expense-amount" class="form-label">Amount (₹) *</label>
+          <input id="expense-amount" type="number" step="0.01" min="0"
+            class="form-control form-control-lg" placeholder="0.00" required />
+        </div>
 
-          <div class="form-group">
-            <label for="expense-description">Description *</label>
-            <textarea id="expense-description" placeholder="Describe the expense..." rows="4" required></textarea>
-          </div>
+        <div class="col-12 col-md-4">
+          <label for="expense-date" class="form-label">Date *</label>
+          <input id="expense-date" type="date" class="form-control form-control-lg" required />
+        </div>
 
-          <div class="form-actions">
-            <button type="submit" class="btn-primary">Add Expense</button>
-            <button type="reset" class="btn-secondary">Clear</button>
-          </div>
+        <div class="col-12 col-md-6">
+          <label for="expense-mode" class="form-label">Payment Mode *</label>
+          <input id="expense-mode" type="text"
+            class="form-control form-control-lg" placeholder="e.g., Cash, Card, Cheque" required />
+        </div>
 
-          <div id="expense-status" class="expense-status"></div>
-        </form>
-      </section>
+        <div class="col-12 col-md-6">
+          <label class="form-label d-block">Transaction Type *</label>
+          <div class="btn-group" role="group" aria-label="Transaction type">
+            <input type="radio" class="btn-check" name="expense-type" id="type-debit" value="debit" autocomplete="off" checked>
+            <label class="btn btn-outline-primary" for="type-debit">Debit</label>
+
+            <input type="radio" class="btn-check" name="expense-type" id="type-credit" value="credit" autocomplete="off">
+            <label class="btn btn-outline-primary" for="type-credit">Credit</label>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <label for="expense-description" class="form-label">Description *</label>
+          <textarea id="expense-description" rows="4"
+            class="form-control form-control-lg" placeholder="Describe the expense..." required></textarea>
+        </div>
+
+        <div class="col-12 d-flex flex-column flex-sm-row gap-3 mt-2">
+          <button type="submit" class="btn btn-primary btn-lg">Add Expense</button>
+          <button type="reset" class="btn btn-outline-secondary btn-lg">Clear</button>
+        </div>
+
+        <div class="col-12">
+          <div id="expense-status" class="mt-3"></div>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
     </main>
   </div>
 

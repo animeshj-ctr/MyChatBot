@@ -220,7 +220,7 @@ def answer_business_query(text: str, db: Session) -> str | None:
             title = "Total debit (spend)"
             val = debit_sum
 
-        who = f" for user {uid}" if uid else " (all users)"
+        who = f" for user {user_obj.name}" if uid else " (all users)"
         per = ""
         if start and end:
             per = f" between {start.isoformat()} and {end.isoformat()}"
