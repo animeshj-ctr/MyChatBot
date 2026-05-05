@@ -151,3 +151,8 @@ python-jose[cryptography]
 passlib[bcrypt]
 argon2-cffi
 python-multipart
+faiss-cpu==1.13.2
+sentence-transformers>=2.0.0
+langchain>=0.1.0
+pypdf>=3.0.0
+langchain-huggingface==0.0.1

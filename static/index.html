@@ -22,6 +22,10 @@
           <h4 id="user-name">User</h4>
           <button id="logout-btn">Logout</button>
         </div>
+        <nav class="main-nav">
+          <a href="/static/index.html" class="nav-link active">💬 Chat</a>
+          <a href="/static/expense.html" class="nav-link">💰 Add Expense</a>
+        </nav>
         <h3>Connection</h3>
         <label><input type="radio" name="mode" value="rest" checked /> REST</label>
         <label><input type="radio" name="mode" value="ws" /> WebSocket</label>
@@ -75,10 +79,17 @@
     const logoutBtn = document.getElementById('logout-btn');
     const userNameEl = document.getElementById('user-name');
 
-    let token = null;
-    let currentUser = null;
+    let token = localStorage.getItem('authToken');
+    let currentUser = localStorage.getItem('currentUser');
     let sessionId = crypto.randomUUID();
     let ws = null;
+
+    // Check if already logged in
+    if (token && currentUser) {
+      loginDiv.style.display = 'none';
+      chatDiv.style.display = 'flex';
+      userNameEl.textContent = currentUser;
+    }
 
     toggleNav.addEventListener('click', () => {
       sidebar.classList.toggle('collapsed');
@@ -93,24 +104,15 @@
     }
 
     function appendOrUpdateBotPartial(text) {
-      let last = chatWindow.querySelector('.bubble.bot.partial');
-      if (!last) {
-        last = document.createElement('div');
-        last.className = 'bubble bot partial';
-        chatWindow.appendChild(last);
-      }
-      last.textContent = text;
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
-
-    function finalizeBotPartial(text) {
       const last = chatWindow.querySelector('.bubble.bot.partial');
-      if (last) {
-        last.classList.remove('partial');
-        last.textContent = text;
-      } else {
-        appendBubble(text, 'bot');
+      if (!last) {
+        appendBubble('', 'bot', 'partial');
       }
+      const lastBubble = chatWindow.querySelector('.bubble.bot.partial');
+      if (lastBubble) {
+        lastBubble.textContent = text;
+      }
+      chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
     function currentMode() {
@@ -149,6 +151,8 @@
         currentUser = username;
         userNameEl.textContent = username;
         loginDiv.style.display = 'none';
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('currentUser', currentUser);
         chatDiv.style.display = 'flex';
       } else {
         alert('Login failed');
@@ -162,14 +166,18 @@
           headers: {'Authorization': `Bearer ${token}`}
         });
       }
-      token = null;
-      currentUser = null;
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
       chatDiv.style.display = 'none';
       loginDiv.style.display = 'block';
       chatWindow.innerHTML = '';
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
       if (ws) {
         ws.close();
-        ws = null;
+        ws = null
+        expenseStatus.textContent = error.detail || 'Failed to add expense.';
+        expenseStatus.className = 'expense-status error';
       }
     });
 

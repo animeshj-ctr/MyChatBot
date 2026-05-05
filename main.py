@@ -19,15 +19,26 @@ import re
 from calendar import monthrange
 from controller.auth import (
     Token, authenticate_user, create_access_token, get_current_user,
-    ACCESS_TOKEN_EXPIRE_MINUTES, fake_users_db
+    ACCESS_TOKEN_EXPIRE_MINUTES, UserInDB
 )
 from fastapi.security import OAuth2PasswordRequestForm
+from controller.rag_service import get_rag_service, initialize_rag
+from controller.vector_db_indexer import get_indexer
 
 load_dotenv('config/dev/.env')
 
 # ---------------- App ----------------
 app = FastAPI(title="FastAPI MyAPI")
-
+# Startup event to initialize RAG
+@app.on_event("startup")
+async def startup_event():
+    """Initialize RAG service on startup (optional)."""
+    try:
+        # Get RAG service to initialize it
+        rag = get_rag_service()
+        print("RAG service initialized. Run POST /rag/index to build the vector database.")
+    except Exception as e:
+        print(f"Warning: Could not initialize RAG service: {str(e)}")
 # Serve static directory for index.html, css, js
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -49,8 +60,12 @@ def logout(current_user: UserInDB = Depends(get_current_user)):
     return {"message": "Logged out successfully"}
 
 @app.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    user = authenticate_user(fake_users_db, form_data.username, form_data.password)
+async def login_for_access_token(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    print('*' * 50)
+    user = authenticate_user(db, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -205,7 +220,7 @@ def answer_business_query(text: str, db: Session) -> str | None:
             title = "Total debit (spend)"
             val = debit_sum
 
-        who = f" for user {uid}" if uid else " (all users)"
+        who = f" for user {user_obj.name}" if uid else " (all users)"
         per = ""
         if start and end:
             per = f" between {start.isoformat()} and {end.isoformat()}"
@@ -413,6 +428,153 @@ def chat(payload: ChatMessage, db: Session = Depends(get_db), current_user: User
     history.append({"user": user_msg, "bot": bot_reply})
     CHAT_HISTORY[session_id] = history[-20:]
     return {"bot": bot_reply, "session_id": session_id}
+
+# ============== RAG ENDPOINTS ==============
+
+class RAGQuery(BaseModel):
+    """Pydantic model for RAG query request"""
+    query: str
+    top_k: int = 5
+    max_length: int = 200
+
+@app.post("/rag/index")
+def build_rag_index(db: Session = Depends(get_db), current_user: UserInDB = Depends(get_current_user)):
+    """
+    Build or rebuild the vector index for RAG.
+    Indexes all users and expenses from the database.
+    """
+    try:
+        indexer = get_indexer()
+        result = indexer.build_index(db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error building index: {str(e)}")
+
+@app.get("/rag/stats")
+def get_rag_stats(current_user: UserInDB = Depends(get_current_user)):
+    """Get RAG index statistics."""
+    try:
+        indexer = get_indexer()
+        stats = indexer.get_index_stats()
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting stats: {str(e)}")
+
+@app.get("/rag/validate")
+def validate_rag_index(db: Session = Depends(get_db), current_user: UserInDB = Depends(get_current_user)):
+    """Validate index consistency with database."""
+    try:
+        indexer = get_indexer()
+        validation = indexer.validate_index(db)
+        return validation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error validating index: {str(e)}")
+
+@app.post("/rag/query")
+def query_rag(payload: RAGQuery, db: Session = Depends(get_db), current_user: UserInDB = Depends(get_current_user)):
+    """
+    Query the RAG system with a question.
+    Retrieves relevant documents and generates an augmented response.
+    """
+    try:
+        rag = get_rag_service()
+        
+        # Check if index is empty
+        if not rag.documents:
+            raise HTTPException(
+                status_code=400,
+                detail="RAG index is empty. Please build the index first using POST /rag/index"
+            )
+        
+        result = rag.query(
+            query=payload.query,
+            db=db,
+            top_k=payload.top_k,
+            max_length=payload.max_length
+        )
+        
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error querying RAG: {str(e)}")
+
+@app.delete("/rag/index")
+def clear_rag_index(current_user: UserInDB = Depends(get_current_user)):
+    """Clear the RAG index."""
+    try:
+        indexer = get_indexer()
+        result = indexer.clear_index()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing index: {str(e)}")
+
+# ============== RAG WEBSOCKET ==============
+
+@app.websocket("/rag/ws")
+async def rag_websocket_endpoint(ws: WebSocket, current_user: UserInDB = Depends(get_current_user)):
+    """
+    WebSocket endpoint for streaming RAG responses.
+    Accepts JSON: {"query": "your question", "top_k": 5, "max_length": 200}
+    """
+    await ws.accept()
+    
+    try:
+        while True:
+            data = await ws.receive_json()
+            query = (data.get("query") or "").strip()
+            top_k = data.get("top_k", 5)
+            max_length = data.get("max_length", 200)
+            
+            if not query:
+                await ws.send_json({"error": "Please provide a query"})
+                continue
+            
+            try:
+                rag = get_rag_service()
+                
+                if not rag.documents:
+                    await ws.send_json({"error": "RAG index is empty. Please build it first."})
+                    continue
+                
+                # Get RAG result
+                result = rag.query(
+                    query=query,
+                    db=None,  # WebSocket doesn't have direct db access in dependency
+                    top_k=top_k,
+                    max_length=max_length
+                )
+                
+                # Send retrieved documents
+                await ws.send_json({
+                    "type": "retrieved",
+                    "documents": result["retrieved_documents"],
+                    "sources": result["sources"]
+                })
+                
+                # Stream response by words
+                response = result["response"]
+                partial = ""
+                for word in response.split():
+                    partial += word + " "
+                    await ws.send_json({
+                        "type": "response_partial",
+                        "text": partial.strip()
+                    })
+                
+                # Send final response
+                await ws.send_json({
+                    "type": "response_complete",
+                    "text": response
+                })
+                
+            except Exception as e:
+                await ws.send_json({"error": f"Error processing query: {str(e)}"})
+    
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        print(f"WebSocket error: {str(e)}")
 
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket, current_user: UserInDB = Depends(get_current_user)):
